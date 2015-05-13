@@ -1,0 +1,202 @@
+/* 
+*  Arduino, Temp, Humidity, WiFi, MySQL and Highcharts remixed by Tim Scott
+*  From a Simple WiFi weather station with Arduino, the DHT11 sensor & the CC3000 chip 
+*  Writtent by Marco Schwartz for Open Home Automation
+*  https://learn.adafruit.com/wifi-weather-station-arduino-cc3000/introduction
+*  Part of the code is based on the work done by Adafruit on the CC3000 chip & the DHT11 sensor
+*  https://learn.adafruit.com/adafruit-cc3000-wifi
+*/
+
+// Include required libraries
+#include <Adafruit_CC3000.h>
+#include <SPI.h>
+//#include <SHT1x.h>
+#include<stdlib.h>
+
+
+// Define CC3000 chip pins
+#define ADAFRUIT_CC3000_IRQ   3
+#define ADAFRUIT_CC3000_VBAT  5
+#define ADAFRUIT_CC3000_CS    10
+
+// WiFi network (change with your settings !)
+#define WLAN_SSID       "Kerrin"        // cannot be longer than 32 characters!
+#define WLAN_PASS       "11111111"
+#define WLAN_SECURITY   WLAN_SEC_WPA2 // This can be WLAN_SEC_UNSEC, WLAN_SEC_WEP, WLAN_SEC_WPA or WLAN_SEC_WPA2
+
+// Specify data and clock connections and instantiate SHT1x object
+#define dataPin  9
+#define clockPin 8
+
+const int numReadings = 20;
+const int numReadings2 = 20;
+
+int readings[numReadings];      // the readings from the analog input
+int index = 0;                  // the index of the current reading
+int total = 0;                  // the running total
+int senseVal1Average = 0;                // the average
+
+int readings2[numReadings2];      // the readings from the analog input
+int index2 = 0;                  // the index of the current reading
+int total2 = 0;                  // the running total
+int senseVal2Average = 0;                // the average
+
+// Create CC3000 & DHT instances
+
+Adafruit_CC3000 cc3000 = Adafruit_CC3000(ADAFRUIT_CC3000_CS, ADAFRUIT_CC3000_IRQ, ADAFRUIT_CC3000_VBAT,
+                                         SPI_CLOCK_DIV2);
+                                         
+// Local server IP, port, and repository (change with your settings !)
+uint32_t ip = cc3000.IP2U32(52,24,159,58);//your computers ip address
+int port = 80;//your webserver port (8888 is the default for MAMP)
+//String repository = "/arduinoTest/";//the folder on your webserver where the sensor.php file is located
+String ContainerID1  = "1";
+String ContainerID2 = "2";
+int sensePin1 = A0;
+int sensePin2 = A1;
+int senseVal1;
+int senseVal2;
+int senseInitialVal1;
+int senseInitialVal2;
+boolean senseHappened = false;
+
+int ticker = 0;
+int tickerrem;
+
+void setup(void)
+{ 
+  Serial.begin(115200);
+    
+  // Initialise the CC3000 module
+  if (!cc3000.begin())
+  {
+    while(1);
+  }
+
+  // Connect to  WiFi network
+  cc3000.connectToAP(WLAN_SSID, WLAN_PASS, WLAN_SECURITY);
+  Serial.println("Connected to WiFi network!");
+    
+  // Check DHCP
+  Serial.println(F("Request DHCP"));
+  while (!cc3000.checkDHCP())
+  {
+    delay(10);
+  }  
+  for (int thisReading = 0; thisReading < numReadings; thisReading++)
+    readings[thisReading] = 0;
+}
+
+void loop(void)
+{
+  ticker = ticker + 1; 
+  // stuff from sesnsor
+  if (senseHappened == false) {
+    senseInitialVal1 = analogRead(sensePin1);
+    senseInitialVal2 = analogRead(sensePin2);
+    senseHappened = true;
+  }
+  else {
+    senseVal1 = (analogRead(sensePin1) - senseInitialVal1) + 1;
+    senseVal2 = (analogRead(sensePin2) - senseInitialVal2) + 1;
+  }
+
+    // subtract the last reading:
+  total= total - readings[index];         
+  // read from the sensor:  
+  readings[index] = senseVal1; 
+  // add the reading to the total:
+  total= total + readings[index];       
+  // advance to the next position in the array:  
+  index = index + 1;   
+
+  total2= total2 - readings2[index2];         
+  // read from the sensor:  
+  readings2[index2] = senseVal2; 
+  // add the reading to the total:
+  total2= total2 + readings2[index2];       
+  // advance to the next position in the array:  
+  index2 = index2 + 1;  
+
+  // if we're at the end of the array...
+  if (index >= numReadings)              
+    // ...wrap around to the beginning: 
+    index = 0;   
+
+  // if we're at the end of the array...
+  if (index2 >= numReadings2)              
+    // ...wrap around to the beginning: 
+    index2 = 0;   
+
+  // calculate the average:
+  senseVal1Average = total / numReadings; 
+  senseVal2Average = total2 / numReadings2;         
+
+  // send it to the computer as ASCII digits
+  delay(1);        // delay in between reads for stability
+ 
+  Serial.println("Ticker:");
+  Serial.println(ticker);
+  Serial.println("Value 1:");
+  Serial.println(senseVal1);
+  Serial.println("Value 1 average:");
+  Serial.println(senseVal1Average);
+  Serial.println("Value 2:");
+  Serial.println(senseVal2);
+  Serial.println("Value 2 average:");
+  Serial.println(senseVal2Average);  
+  
+  String CurWeightString1 = String(senseVal1);
+  String CurWeightString2 = String(senseVal2);
+    
+   tickerrem = ticker % 20;
+    if (tickerrem == 0) {
+    // Send request
+    String request = "GET /arduino.php?ContainerID=" + ContainerID1 + "&CurWeight="+ CurWeightString1 +" HTTP/1.0";
+    send_request(request);
+    Serial.println("");
+    Serial.print("request: ");
+    Serial.println(request);
+    Serial.println("");
+    
+        // Send request
+    String request2 = "GET /arduino.php?ContainerID=" + ContainerID2 + "&CurWeight="+ CurWeightString2 +" HTTP/1.0";
+    send_request(request2);
+    Serial.println("");
+    Serial.print("request2: ");
+    Serial.println(request2);
+    Serial.println("");
+    // Update every 30 seconds
+    delay(100);
+    }
+}
+
+// Function to send a TCP request and get the result as a string
+void send_request (String request) {
+     
+    // Connect    
+    Serial.println("Starting connection to server...");
+    Adafruit_CC3000_Client client = cc3000.connectTCP(ip, port);
+    
+    // Send request
+    if (client.connected()) {
+      client.println(request);      
+      client.println(F(""));
+      Serial.println("Connected & Data sent");
+    } 
+    else {
+      Serial.println(F("Connection failed"));    
+    }
+
+    while (client.connected()) {
+      while (client.available()) {
+
+      // Read answer
+      char c = client.read();
+      }
+    }
+    Serial.println("Closing connection");
+    Serial.println("");
+    client.close();
+    
+}
