@@ -1,0 +1,43 @@
+".container": {
+	backgroundColor:"white"
+}
+
+
+
+"#containerInfo": {
+	
+	backgroundColor: "#fff"
+}
+
+"#containerLabel": {
+	color: "#fff",
+	font: {
+		fontSize: 28
+	}
+}
+
+"#percentageValue": {
+	
+	color: "#463e3e",
+	font: {
+		fontSize: 26
+	}
+}
+
+"#dateAdded": {
+	
+	color: "#463e3e",
+	font: {
+		fontSize: 22,
+		fontStyle:"italic"
+	}
+}
+
+"#resetButton": {
+	
+	backgroundColor: "#45666d",
+	color: "#fff",
+	font: {
+		fontSize: 24
+	}
+}
